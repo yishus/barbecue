@@ -1,6 +1,9 @@
 {
+  "tools": ["readFile"],
   "steps": [
-    "What is 2+2?",
-    "What if you multiply the answer by 12"
+    "Read the provided CSV files.",
+    "Where are most of my customers from?",
+    "What is my most popular product?",
+    "Summarize the insights from the report."
   ]
 }

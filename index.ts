@@ -4,22 +4,29 @@ import { argv } from "node:process";
 
 import OpenAI from "openai";
 
+import availableTools from "./tools";
+
 import type { ConversationItem } from "openai/resources/conversations";
+import type {
+  ResponseInputItem,
+  Tool,
+} from "openai/resources/responses/responses";
 
 interface Workflow {
   systemPrompt?: string;
   steps: string[];
+  tools?: string[];
 }
 
 const runWorkflow = async (workflow: Workflow) => {
   const client = new OpenAI();
-  const { steps } = workflow;
+  const { steps, systemPrompt, tools: workflowTools } = workflow;
 
   const initialItems = [
     {
       type: "message",
       role: "system",
-      content: workflow.systemPrompt || "You are a helpful assistant.",
+      content: systemPrompt || "You are a helpful assistant.",
     },
   ];
 
@@ -27,8 +34,10 @@ const runWorkflow = async (workflow: Workflow) => {
     items: initialItems,
   });
 
+  const tools = toolDefinitions(workflowTools || []);
+
   for (const step of steps) {
-    await client.responses.create({
+    const res = await client.responses.create({
       conversation: conversation.id,
       model: "gpt-4.1-nano",
       input: [
@@ -37,13 +46,63 @@ const runWorkflow = async (workflow: Workflow) => {
           content: step,
         },
       ],
+      tools,
     });
+
+    let responseContainsFunctionCall = res.output.some(
+      (item) => item.type === "function_call",
+    );
+
+    while (responseContainsFunctionCall) {
+      let functionResults: ResponseInputItem.FunctionCallOutput[] = [];
+
+      for (const item of res.output) {
+        if (item.type === "function_call") {
+          const tool =
+            availableTools[
+              snakeToCamel(item.name) as keyof typeof availableTools
+            ];
+          if (tool) {
+            const functionResult = await tool.callFunction(
+              JSON.parse(item.arguments),
+            );
+            functionResults.push({
+              type: "function_call_output",
+              call_id: item.call_id,
+              output: functionResult || "No output returned.",
+            });
+          }
+        }
+      }
+
+      if (functionResults.length > 0) {
+        const functionOutputResponse = await client.responses.create({
+          conversation: conversation.id,
+          model: "gpt-4.1-nano",
+          input: functionResults,
+          tools,
+        });
+        responseContainsFunctionCall = functionOutputResponse.output.some(
+          (item) => item.type === "function_call",
+        );
+      }
+    }
   }
 
   const items = await client.conversations.items.list(conversation.id, {
     limit: 5,
   });
   printAssistantLastMessage(items.data);
+};
+
+const toolDefinitions = (selectedTools: string[]): Tool[] => {
+  const definitions = [];
+  for (const tool of selectedTools) {
+    const validToolName = tool as keyof typeof availableTools;
+    definitions.push(availableTools[validToolName].definition);
+  }
+
+  return definitions;
 };
 
 const fileStatAtPath = async (path: string) => {
@@ -82,13 +141,19 @@ const printAssistantLastMessage = (items: ConversationItem[]) => {
       if (item.role !== "assistant") {
         return;
       }
-      item.content.forEach((contentItem) => {
+      for (const contentItem of item.content) {
         if ("text" in contentItem) {
           console.log(contentItem.text);
           return;
         }
-      });
+      }
     }
+  }
+};
+
+const snakeToCamel = (str: string) => {
+  return str.toLowerCase().replace(/(_\w)/g, (match) => {
+    return match.toUpperCase().substring(1);
   });
 };
 
