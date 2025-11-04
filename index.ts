@@ -1,9 +1,10 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { argv } from "node:process";
+import { parseArgs } from "node:util";
 
 import OpenAI from "openai";
 
+import { fileStatAtPath } from "./helper";
 import availableTools from "./tools";
 
 import type { ConversationItem } from "openai/resources/conversations";
@@ -105,18 +106,6 @@ const toolDefinitions = (selectedTools: string[]): Tool[] => {
   return definitions;
 };
 
-const fileStatAtPath = async (path: string) => {
-  try {
-    const stats = await stat(path);
-    return {
-      isFile: stats.isFile(),
-      isDirectory: stats.isDirectory(),
-    };
-  } catch (err) {
-    console.log(err);
-  }
-};
-
 const runWorkflowAtPath = async (filePath: string) => {
   let workflow: Workflow = { steps: [] };
   try {
@@ -158,10 +147,14 @@ const snakeToCamel = (str: string) => {
 };
 
 const main = async () => {
-  const workflowPath = argv[2];
+  const { positionals } = parseArgs({
+    allowPositionals: true,
+  });
+  const workflowPath = positionals[0];
   const res = await fileStatAtPath(workflowPath);
   if (res?.isDirectory) {
-    runWorkflowAtPath(`${workflowPath}/workflow.json`);
+    // Add trailing slash if not present
+    runWorkflowAtPath(`${workflowPath.replace(/([^/])$/, "$1/")}workflow.json`);
   } else if (res?.isFile) {
     runWorkflowAtPath(workflowPath);
   } else {
