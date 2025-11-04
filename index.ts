@@ -38,6 +38,7 @@ const runWorkflow = async (workflow: Workflow) => {
   const tools = toolDefinitions(workflowTools || []);
 
   for (const step of steps) {
+    console.log("Processing step:", step);
     const res = await client.responses.create({
       conversation: conversation.id,
       model: "gpt-4.1-nano",
@@ -50,6 +51,8 @@ const runWorkflow = async (workflow: Workflow) => {
       tools,
     });
 
+    console.log("Assistant:", res.output_text);
+
     let responseContainsFunctionCall = res.output.some(
       (item) => item.type === "function_call",
     );
@@ -59,6 +62,8 @@ const runWorkflow = async (workflow: Workflow) => {
 
       for (const item of res.output) {
         if (item.type === "function_call") {
+          console.log("Invoking tool:", item.name);
+          console.log("With arguments:", item.arguments);
           const tool =
             availableTools[
               snakeToCamel(item.name) as keyof typeof availableTools
