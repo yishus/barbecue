@@ -4,7 +4,7 @@ import type { Tool } from "openai/resources/responses/responses";
 
 import { fileStatAtPath } from "../helper";
 
-export const definition: Tool = {
+const definition: Tool = {
   type: "function",
   name: "read_file",
   description:
@@ -23,7 +23,7 @@ export const definition: Tool = {
   strict: true,
 };
 
-export const callFunction = async (args: { path: string }) => {
+const callFunction = async (args: { path: string }) => {
   const { path } = args;
 
   try {
