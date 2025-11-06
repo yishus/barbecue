@@ -11,3 +11,9 @@ export const fileStatAtPath = async (path: string) => {
     console.log(err);
   }
 };
+
+export const snakeToCamel = (str: string) => {
+  return str.toLowerCase().replace(/(_\w)/g, (match) => {
+    return match.toUpperCase().substring(1);
+  });
+};
