@@ -13,7 +13,7 @@ import type {
 
 export interface Workflow {
   directory: string;
-  steps: string[];
+  steps: Array<string | string[]>;
   systemPrompt?: string;
   tools?: string[];
   files?: string[];
@@ -54,68 +54,20 @@ const runSingleWorkflow = async (workflow: Workflow, filePath?: string) => {
     items: initialItems,
   });
 
-  const tools = toolDefinitions(workflowTools || []);
+  const promptData: PromptData = {
+    workflow: {
+      file: filePath,
+    },
+  };
 
   for (const step of steps) {
-    console.log("Processing step:", step);
-    const stepPromptContent = await stepPrompt(workflow, step, {
-      workflow: {
-        file: filePath,
-      },
-    });
-    const res = await client.responses.create({
-      conversation: conversation.id,
-      model: "gpt-4.1-nano",
-      input: [
-        {
-          role: "user",
-          content: stepPromptContent || step,
-        },
-      ],
-      tools,
-    });
-
-    console.log("Assistant:", res.output_text);
-
-    let responseContainsFunctionCall = res.output.some(
-      (item) => item.type === "function_call",
-    );
-
-    while (responseContainsFunctionCall) {
-      let functionResults: ResponseInputItem.FunctionCallOutput[] = [];
-
-      for (const item of res.output) {
-        if (item.type === "function_call") {
-          console.log("Invoking tool:", item.name);
-          console.log("With arguments:", item.arguments);
-          const tool =
-            availableTools[
-              snakeToCamel(item.name) as keyof typeof availableTools
-            ];
-          if (tool) {
-            const functionResult = await tool.callFunction(
-              JSON.parse(item.arguments),
-            );
-            functionResults.push({
-              type: "function_call_output",
-              call_id: item.call_id,
-              output: functionResult || "No output returned.",
-            });
-          }
-        }
-      }
-
-      if (functionResults.length > 0) {
-        const functionOutputResponse = await client.responses.create({
-          conversation: conversation.id,
-          model: "gpt-4.1-nano",
-          input: functionResults,
-          tools,
-        });
-        responseContainsFunctionCall = functionOutputResponse.output.some(
-          (item) => item.type === "function_call",
-        );
-      }
+    if (Array.isArray(step)) {
+      const parallelSteps = step.map((s) =>
+        processStep(s, workflow, promptData, client, conversation),
+      );
+      await Promise.all(parallelSteps);
+    } else {
+      await processStep(step, workflow, promptData, client, conversation);
     }
   }
 
@@ -123,6 +75,75 @@ const runSingleWorkflow = async (workflow: Workflow, filePath?: string) => {
     limit: 5,
   });
   printAssistantLastMessage(items.data);
+};
+
+const processStep = async (
+  step: string,
+  workflow: Workflow,
+  promptData: PromptData,
+  client: OpenAI,
+  conversation: OpenAI.Conversations.Conversation,
+) => {
+  const { tools: workflowTools } = workflow;
+
+  console.log("Processing step:", step);
+
+  const tools = toolDefinitions(workflowTools || []);
+  const stepPromptContent = await stepPrompt(workflow, step, promptData);
+  const res = await client.responses.create({
+    conversation: conversation.id,
+    model: "gpt-4.1-nano",
+    input: [
+      {
+        role: "user",
+        content: stepPromptContent || step,
+      },
+    ],
+    tools,
+  });
+
+  console.log("Assistant:", res.output_text);
+
+  let responseContainsFunctionCall = res.output.some(
+    (item) => item.type === "function_call",
+  );
+
+  while (responseContainsFunctionCall) {
+    let functionResults: ResponseInputItem.FunctionCallOutput[] = [];
+
+    for (const item of res.output) {
+      if (item.type === "function_call") {
+        console.log("Invoking tool:", item.name);
+        console.log("With arguments:", item.arguments);
+        const tool =
+          availableTools[
+            snakeToCamel(item.name) as keyof typeof availableTools
+          ];
+        if (tool) {
+          const functionResult = await tool.callFunction(
+            JSON.parse(item.arguments),
+          );
+          functionResults.push({
+            type: "function_call_output",
+            call_id: item.call_id,
+            output: functionResult || "No output returned.",
+          });
+        }
+      }
+    }
+
+    if (functionResults.length > 0) {
+      const functionOutputResponse = await client.responses.create({
+        conversation: conversation.id,
+        model: "gpt-4.1-nano",
+        input: functionResults,
+        tools,
+      });
+      responseContainsFunctionCall = functionOutputResponse.output.some(
+        (item) => item.type === "function_call",
+      );
+    }
+  }
 };
 
 const stepPrompt = async (
