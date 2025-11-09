@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import vm from "node:vm";
 import OpenAI from "openai";
 import { Eta } from "eta";
 
@@ -14,6 +15,7 @@ import type {
 export interface Workflow {
   directory: string;
   steps: Array<string | string[]>;
+  output: { [key: string]: any };
   systemPrompt?: string;
   tools?: string[];
   files?: string[];
@@ -37,7 +39,7 @@ export const execute = async (workflow: Workflow) => {
 
 const runSingleWorkflow = async (workflow: Workflow, filePath?: string) => {
   const client = new OpenAI();
-  const { steps, systemPrompt, tools: workflowTools } = workflow;
+  const { steps, systemPrompt } = workflow;
 
   const initialItems = [
     {
@@ -88,6 +90,17 @@ const processStep = async (
 
   console.log("Processing step:", step);
 
+  const isCustomStep = await runCustomStep(
+    step,
+    workflow,
+    client,
+    conversation,
+  );
+  if (isCustomStep) {
+    console.log(`Custom step ${step} executed.`);
+    return;
+  }
+
   const tools = toolDefinitions(workflowTools || []);
   const stepPromptContent = await stepPrompt(workflow, step, promptData);
   const res = await client.responses.create({
@@ -101,8 +114,6 @@ const processStep = async (
     ],
     tools,
   });
-
-  console.log("Assistant:", res.output_text);
 
   let responseContainsFunctionCall = res.output.some(
     (item) => item.type === "function_call",
@@ -144,6 +155,9 @@ const processStep = async (
       );
     }
   }
+
+  workflow.output[step] = res.output_text;
+  console.log("Assistant:", res.output_text);
 };
 
 const stepPrompt = async (
@@ -152,7 +166,6 @@ const stepPrompt = async (
   data: PromptData,
 ): Promise<string | null> => {
   try {
-    console.log(`${workflow.directory}/${step}/prompt.md`);
     const promptString = await readFile(
       `${workflow.directory}/${step}/prompt.md`,
       {
@@ -165,6 +178,45 @@ const stepPrompt = async (
   } catch (err) {
     console.log(err);
     return null;
+  }
+};
+
+const runCustomStep = async (
+  step: string,
+  workflow: Workflow,
+  client: OpenAI,
+  conversation: OpenAI.Conversations.Conversation,
+): Promise<Boolean> => {
+  try {
+    const customStepCode = await readFile(`${workflow.directory}/${step}.js`, {
+      encoding: "utf8",
+    });
+
+    const contextObject = {
+      workflow,
+    };
+
+    const res = vm.runInNewContext(customStepCode, contextObject);
+
+    await client.conversations.items.create(conversation.id, {
+      items: [
+        {
+          type: "message",
+          role: "user",
+          content: `Custom step ${step} executed.`,
+        },
+        {
+          type: "message",
+          role: "user",
+          content: `Result: ${res}`,
+        },
+      ],
+    });
+
+    workflow.output[step] = res;
+    return true;
+  } catch (err) {
+    return false;
   }
 };
 
