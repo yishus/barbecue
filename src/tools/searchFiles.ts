@@ -5,7 +5,8 @@ import type { Tool } from "openai/resources/responses/responses";
 const definition: Tool = {
   type: "function",
   name: "search_files",
-  description: "Searches for files in a directory matching a specific filename pattern and returns their paths.",
+  description:
+    "Searches for files in a directory matching a specific filename pattern and returns their paths.",
   parameters: {
     type: "object",
     properties: {
@@ -15,9 +16,10 @@ const definition: Tool = {
       },
       path: {
         type: "string",
-        description: "The directory to search in. Defaults to the current working directory.",
+        description:
+          "The directory to search in. Defaults to the current working directory.",
       },
-    ,
+    },
     required: ["pattern"],
     additionalProperties: false,
   },
@@ -29,8 +31,8 @@ const callFunction = async (args: { pattern: string; path?: string }) => {
   const files = await glob(pattern, { cwd: path, absolute: true });
   return files.join("\n");
 };
-        
+
 export default {
   callFunction,
   definition,
-}
+};

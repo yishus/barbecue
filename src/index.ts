@@ -8,14 +8,18 @@ import { execute } from "./workflowRunner";
 import type { Workflow } from "./workflowRunner";
 
 const runWorkflowAtPath = async (filePath: string, target?: string) => {
-  let workflow: Workflow = { steps: [] };
+  const directory = path.dirname(filePath);
+  let workflow: Workflow = { directory, steps: [] };
   try {
     const data = await readFile(filePath, { encoding: "utf8" });
-    workflow = JSON.parse(data) as Workflow;
+    const workflowFromFile = JSON.parse(data) as Workflow;
     // TODO Support other forms of targets
-    workflow = { ...workflow, files: target ? [target] : undefined };
+    workflow = {
+      ...workflow,
+      ...workflowFromFile,
+      files: target ? [target] : undefined,
+    };
 
-    const directory = path.dirname(filePath);
     const workflowPrompt = await readFile(`${directory}/workflow.md`);
     execute({ ...workflow, systemPrompt: workflowPrompt.toString() });
   } catch (err: any) {

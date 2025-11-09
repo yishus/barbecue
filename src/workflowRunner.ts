@@ -10,19 +10,24 @@ import type {
 } from "openai/resources/responses/responses";
 
 export interface Workflow {
-  systemPrompt?: string;
+  directory: string;
   steps: string[];
+  systemPrompt?: string;
   tools?: string[];
   files?: string[];
 }
 
 export const execute = async (workflow: Workflow) => {
-  for (const file of workflow.files || []) {
-    runSingleWorkflow(workflow, file);
+  if (workflow.files && workflow.files.length > 0) {
+    for (const file of workflow.files) {
+      runSingleWorkflow(workflow, file);
+    }
+  } else {
+    runSingleWorkflow(workflow);
   }
 };
 
-const runSingleWorkflow = async (workflow: Workflow, filePath: string) => {
+const runSingleWorkflow = async (workflow: Workflow, filePath?: string) => {
   const client = new OpenAI();
   const { steps, systemPrompt, tools: workflowTools } = workflow;
 
@@ -30,7 +35,10 @@ const runSingleWorkflow = async (workflow: Workflow, filePath: string) => {
     {
       type: "message",
       role: "system",
-      content: systemPrompt || `You are working on the file: ${filePath}`,
+      content:
+        systemPrompt || filePath
+          ? `You are working on the file: ${filePath}`
+          : "You are a helpful assistant.",
     },
   ];
 
