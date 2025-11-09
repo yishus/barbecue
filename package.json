@@ -10,6 +10,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "eta": "^4.0.1",
     "glob": "^11.0.3",
     "openai": "^6.3.0"
   }

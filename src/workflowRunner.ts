@@ -1,4 +1,6 @@
+import { readFile } from "node:fs/promises";
 import OpenAI from "openai";
+import { Eta } from "eta";
 
 import availableTools from "./tools";
 import { snakeToCamel } from "./helper";
@@ -15,6 +17,12 @@ export interface Workflow {
   systemPrompt?: string;
   tools?: string[];
   files?: string[];
+}
+
+export interface PromptData {
+  workflow: {
+    file?: string;
+  };
 }
 
 export const execute = async (workflow: Workflow) => {
@@ -50,13 +58,18 @@ const runSingleWorkflow = async (workflow: Workflow, filePath?: string) => {
 
   for (const step of steps) {
     console.log("Processing step:", step);
+    const stepPromptContent = await stepPrompt(workflow, step, {
+      workflow: {
+        file: filePath,
+      },
+    });
     const res = await client.responses.create({
       conversation: conversation.id,
       model: "gpt-4.1-nano",
       input: [
         {
           role: "user",
-          content: step,
+          content: stepPromptContent || step,
         },
       ],
       tools,
@@ -110,6 +123,28 @@ const runSingleWorkflow = async (workflow: Workflow, filePath?: string) => {
     limit: 5,
   });
   printAssistantLastMessage(items.data);
+};
+
+const stepPrompt = async (
+  workflow: Workflow,
+  step: string,
+  data: PromptData,
+): Promise<string | null> => {
+  try {
+    console.log(`${workflow.directory}/${step}/prompt.md`);
+    const promptString = await readFile(
+      `${workflow.directory}/${step}/prompt.md`,
+      {
+        encoding: "utf8",
+      },
+    );
+    const eta = new Eta();
+    const stepContent = await eta.renderStringAsync(promptString, data);
+    return stepContent;
+  } catch (err) {
+    console.log(err);
+    return null;
+  }
 };
 
 const toolDefinitions = (selectedTools: string[]): Tool[] => {
