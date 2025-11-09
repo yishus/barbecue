@@ -196,6 +196,9 @@ const runCustomStep = async (
 
     const contextObject = {
       workflow,
+      appendToFinalOutput: (output: string) => {
+        workflow.finalOutput.push(output);
+      },
     };
 
     const res = vm.runInNewContext(customStepCode, contextObject);
