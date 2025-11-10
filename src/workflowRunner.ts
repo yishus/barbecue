@@ -155,6 +155,7 @@ const processStep = async (
   }
 
   workflow.output[step] = res.output_text;
+  writeFinalOutput(workflow, configuration);
   console.log("Assistant:", res.output_text);
 };
 
@@ -224,6 +225,26 @@ const runCustomStep = async (
     return false;
   }
 };
+
+const writeFinalOutput = async (step: string, workflow: Workflow, configuration: Configuration) => {
+  try {
+     const outputTemplate = await readFile(
+      `${configuration.directory}/${step}/output.txt`,
+      {
+        encoding: "utf8",
+      },
+    );
+    const eta = new Eta();
+    const finalOutput = await eta.renderStringAsync(outputTemplate, workflow);
+    workflow.finalOutput.push(finalOutput);
+    return;
+  } catch (err) {
+    workflow.finalOutput.push(workflow.output[step]);
+    return;
+  }
+  }
+}
+  
 
 const toolDefinitions = (selectedTools: string[]): Tool[] => {
   const definitions = [];
