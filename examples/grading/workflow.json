@@ -1,11 +1,4 @@
 {
   "tools": ["grep", "readFile", "searchFiles"],
-  "steps": [
-    "read_dependencies",
-    ["verify_test_helpers", "verify_mocks_and_stubs"],
-    "generate_grades",
-    "calculate_final_grade",
-    "format_result",
-    "generate_recommendations"
-  ]
+  "steps": ["read_dependencies", ["verify_test_helpers"]]
 }

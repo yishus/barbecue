@@ -4,4 +4,4 @@ Next I will now provide the source code of the test that we will be analyzing, a
 
 File path: <%= it.workflow.file %>
 
-<%= await readFile(it.workflow.file, {encoding: "utf8",}); %>
+<%= await it.readFile(it.workflow.file, {encoding: "utf8"}) %>

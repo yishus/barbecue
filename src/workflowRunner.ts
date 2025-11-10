@@ -8,6 +8,7 @@ import { snakeToCamel } from "./helper";
 
 import type { ConversationItem } from "openai/resources/conversations";
 import type {
+  EasyInputMessage,
   ResponseInputItem,
   Tool,
 } from "openai/resources/responses/responses";
@@ -49,10 +50,11 @@ const runSingleWorkflow = async (
       type: "message",
       role: "system",
       content:
-        systemPrompt || filePath
+        systemPrompt ||
+        (filePath
           ? `You are working on the file: ${filePath}`
-          : "You are a helpful assistant.",
-    },
+          : "You are a helpful assistant."),
+    } as EasyInputMessage,
   ];
 
   const conversation = await client.conversations.create({
@@ -76,25 +78,31 @@ const runSingleWorkflow = async (
   printAssistantLastMessage(items.data);
 };
 
-const readSystemPrompt = async (workflow: Workflow, configuration: Configuration): Promise<string | null> => {
+const readSystemPrompt = async (
+  workflow: Workflow,
+  configuration: Configuration,
+): Promise<string | null> => {
   try {
     const eta = new Eta();
-    const workflowPromptTemplate = await readFile(`${configuration.directory}/workflow.md`, {
-      encoding: "utf8",
-    });
-    const systemPrompt = await eta.renderStringAsync(
-      workflowPromptTemplate,
-      {workflow},
+    const workflowPromptTemplate = await readFile(
+      `${configuration.directory}/workflow.md`,
+      {
+        encoding: "utf8",
+      },
     );
+    const systemPrompt = await eta.renderStringAsync(workflowPromptTemplate, {
+      workflow,
+      readFile: readFile,
+    });
     return systemPrompt;
-  }  catch (err: any) {
+  } catch (err: any) {
     if (err.code !== "ENOENT" || !err.path.endsWith("workflow.md")) {
       console.error("Error reading file:", err);
     }
 
     return null;
   }
-}
+};
 
 const processStep = async (
   step: string,
@@ -185,14 +193,16 @@ const stepPrompt = async (
   configuration: Configuration,
 ): Promise<string | null> => {
   try {
-    const promptTemplate= await readFile(
+    const promptTemplate = await readFile(
       `${configuration.directory}/${step}/prompt.md`,
       {
         encoding: "utf8",
       },
     );
     const eta = new Eta();
-    const stepContent = await eta.renderStringAsync(promptTemplate, workflow);
+    const stepContent = await eta.renderStringAsync(promptTemplate, {
+      workflow,
+    });
     return stepContent;
   } catch (err) {
     console.log(err);
@@ -246,9 +256,13 @@ const runCustomStep = async (
   }
 };
 
-const writeFinalOutput = async (step: string, workflow: Workflow, configuration: Configuration) => {
+const writeFinalOutput = async (
+  step: string,
+  workflow: Workflow,
+  configuration: Configuration,
+) => {
   try {
-     const outputTemplate = await readFile(
+    const outputTemplate = await readFile(
       `${configuration.directory}/${step}/output.txt`,
       {
         encoding: "utf8",
@@ -262,9 +276,7 @@ const writeFinalOutput = async (step: string, workflow: Workflow, configuration:
     workflow.finalOutput.push(workflow.output[step]);
     return;
   }
-  }
-}
-  
+};
 
 const toolDefinitions = (selectedTools: string[]): Tool[] => {
   const definitions = [];

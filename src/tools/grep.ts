@@ -35,7 +35,7 @@ const definition: Tool = {
     required: ["pattern"],
     additionalProperties: false,
   },
-  strict: true,
+  strict: false,
 };
 
 const callFunction = async (args: {
