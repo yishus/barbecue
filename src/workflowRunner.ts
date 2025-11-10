@@ -15,7 +15,6 @@ import type {
 export interface Configuration {
   directory: string;
   steps: Array<string | string[]>;
-  systemPrompt?: string;
   tools?: string[];
   files?: string[];
 }
@@ -42,7 +41,8 @@ const runSingleWorkflow = async (
 ) => {
   const workflow: Workflow = { output: {}, finalOutput: [], file: filePath };
   const client = new OpenAI();
-  const { steps, systemPrompt } = configuration;
+  const { steps } = configuration;
+  const systemPrompt = await readSystemPrompt(workflow, configuration);
 
   const initialItems = [
     {
@@ -75,6 +75,26 @@ const runSingleWorkflow = async (
   });
   printAssistantLastMessage(items.data);
 };
+
+const readSystemPrompt = async (workflow: Workflow, configuration: Configuration): Promise<string | null> => {
+  try {
+    const eta = new Eta();
+    const workflowPromptTemplate = await readFile(`${configuration.directory}/workflow.md`, {
+      encoding: "utf8",
+    });
+    const systemPrompt = await eta.renderStringAsync(
+      workflowPromptTemplate,
+      {workflow},
+    );
+    return systemPrompt;
+  }  catch (err: any) {
+    if (err.code !== "ENOENT" || !err.path.endsWith("workflow.md")) {
+      console.error("Error reading file:", err);
+    }
+
+    return null;
+  }
+}
 
 const processStep = async (
   step: string,
@@ -155,7 +175,7 @@ const processStep = async (
   }
 
   workflow.output[step] = res.output_text;
-  writeFinalOutput(workflow, configuration);
+  writeFinalOutput(step, workflow, configuration);
   console.log("Assistant:", res.output_text);
 };
 
@@ -165,14 +185,14 @@ const stepPrompt = async (
   configuration: Configuration,
 ): Promise<string | null> => {
   try {
-    const promptString = await readFile(
+    const promptTemplate= await readFile(
       `${configuration.directory}/${step}/prompt.md`,
       {
         encoding: "utf8",
       },
     );
     const eta = new Eta();
-    const stepContent = await eta.renderStringAsync(promptString, workflow);
+    const stepContent = await eta.renderStringAsync(promptTemplate, workflow);
     return stepContent;
   } catch (err) {
     console.log(err);

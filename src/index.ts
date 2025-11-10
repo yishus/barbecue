@@ -8,27 +8,20 @@ import { execute } from "./workflowRunner";
 import type { Configuration } from "./workflowRunner";
 
 const runWorkflowAtPath = async (filePath: string, target?: string) => {
-  const directory = path.dirname(filePath);
-  let configuration: Configuration = { directory, steps: [] };
-  try {
-    const data = await readFile(filePath, { encoding: "utf8" });
-    const configurationFromFile = JSON.parse(data) as Configuration;
-    // TODO Support other forms of targets
-    configuration = {
-      ...configuration,
-      ...configurationFromFile,
-      files: target ? [target] : undefined,
-    };
+  let configuration: Configuration = {
+    directory: path.dirname(filePath),
+    steps: [],
+  };
+  const data = await readFile(filePath, { encoding: "utf8" });
+  const configurationFromFile = JSON.parse(data) as Configuration;
+  // TODO Support other forms of targets
+  configuration = {
+    ...configuration,
+    ...configurationFromFile,
+    files: target ? [target] : undefined,
+  };
 
-    const workflowPrompt = await readFile(`${directory}/workflow.md`);
-    execute({ ...configuration, systemPrompt: workflowPrompt.toString() });
-  } catch (err: any) {
-    if (err.code === "ENOENT" && err.path.endsWith("workflow.md")) {
-      execute(configuration);
-      return;
-    }
-    console.error("Error reading file:", err);
-  }
+  execute(configuration);
 };
 
 const main = async () => {
