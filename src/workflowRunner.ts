@@ -12,34 +12,37 @@ import type {
   Tool,
 } from "openai/resources/responses/responses";
 
-export interface Workflow {
+export interface Configuration {
   directory: string;
   steps: Array<string | string[]>;
-  output: { [key: string]: any };
   systemPrompt?: string;
   tools?: string[];
   files?: string[];
 }
 
-export interface PromptData {
-  workflow: {
-    file?: string;
-  };
+export interface Workflow {
+  output: { [key: string]: any };
+  finalOutput: string[];
+  file?: string;
 }
 
-export const execute = async (workflow: Workflow) => {
-  if (workflow.files && workflow.files.length > 0) {
-    for (const file of workflow.files) {
-      runSingleWorkflow(workflow, file);
+export const execute = async (configuration: Configuration) => {
+  if (configuration.files && configuration.files.length > 0) {
+    for (const file of configuration.files) {
+      runSingleWorkflow(configuration, file);
     }
   } else {
-    runSingleWorkflow(workflow);
+    runSingleWorkflow(configuration);
   }
 };
 
-const runSingleWorkflow = async (workflow: Workflow, filePath?: string) => {
+const runSingleWorkflow = async (
+  configuration: Configuration,
+  filePath?: string,
+) => {
+  const workflow: Workflow = { output: {}, finalOutput: [], file: filePath };
   const client = new OpenAI();
-  const { steps, systemPrompt } = workflow;
+  const { steps, systemPrompt } = configuration;
 
   const initialItems = [
     {
@@ -56,20 +59,14 @@ const runSingleWorkflow = async (workflow: Workflow, filePath?: string) => {
     items: initialItems,
   });
 
-  const promptData: PromptData = {
-    workflow: {
-      file: filePath,
-    },
-  };
-
   for (const step of steps) {
     if (Array.isArray(step)) {
       const parallelSteps = step.map((s) =>
-        processStep(s, workflow, promptData, client, conversation),
+        processStep(s, workflow, configuration, client, conversation),
       );
       await Promise.all(parallelSteps);
     } else {
-      await processStep(step, workflow, promptData, client, conversation);
+      await processStep(step, workflow, configuration, client, conversation);
     }
   }
 
@@ -82,17 +79,18 @@ const runSingleWorkflow = async (workflow: Workflow, filePath?: string) => {
 const processStep = async (
   step: string,
   workflow: Workflow,
-  promptData: PromptData,
+  configuration: Configuration,
   client: OpenAI,
   conversation: OpenAI.Conversations.Conversation,
 ) => {
-  const { tools: workflowTools } = workflow;
+  const { tools: workflowTools } = configuration;
 
   console.log("Processing step:", step);
 
   const isCustomStep = await runCustomStep(
     step,
     workflow,
+    configuration,
     client,
     conversation,
   );
@@ -102,7 +100,7 @@ const processStep = async (
   }
 
   const tools = toolDefinitions(workflowTools || []);
-  const stepPromptContent = await stepPrompt(workflow, step, promptData);
+  const stepPromptContent = await stepPrompt(step, workflow, configuration);
   const res = await client.responses.create({
     conversation: conversation.id,
     model: "gpt-4.1-nano",
@@ -161,19 +159,19 @@ const processStep = async (
 };
 
 const stepPrompt = async (
-  workflow: Workflow,
   step: string,
-  data: PromptData,
+  workflow: Workflow,
+  configuration: Configuration,
 ): Promise<string | null> => {
   try {
     const promptString = await readFile(
-      `${workflow.directory}/${step}/prompt.md`,
+      `${configuration.directory}/${step}/prompt.md`,
       {
         encoding: "utf8",
       },
     );
     const eta = new Eta();
-    const stepContent = await eta.renderStringAsync(promptString, data);
+    const stepContent = await eta.renderStringAsync(promptString, workflow);
     return stepContent;
   } catch (err) {
     console.log(err);
@@ -184,13 +182,17 @@ const stepPrompt = async (
 const runCustomStep = async (
   step: string,
   workflow: Workflow,
+  configuration: Configuration,
   client: OpenAI,
   conversation: OpenAI.Conversations.Conversation,
 ): Promise<Boolean> => {
   try {
-    const customStepCode = await readFile(`${workflow.directory}/${step}.js`, {
-      encoding: "utf8",
-    });
+    const customStepCode = await readFile(
+      `${configuration.directory}/${step}.js`,
+      {
+        encoding: "utf8",
+      },
+    );
 
     const contextObject = {
       workflow,

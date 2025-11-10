@@ -5,26 +5,26 @@ import { parseArgs } from "node:util";
 import { fileStatAtPath } from "./helper";
 import { execute } from "./workflowRunner";
 
-import type { Workflow } from "./workflowRunner";
+import type { Configuration } from "./workflowRunner";
 
 const runWorkflowAtPath = async (filePath: string, target?: string) => {
   const directory = path.dirname(filePath);
-  let workflow: Workflow = { directory, steps: [] };
+  let configuration: Configuration = { directory, steps: [] };
   try {
     const data = await readFile(filePath, { encoding: "utf8" });
-    const workflowFromFile = JSON.parse(data) as Workflow;
+    const configurationFromFile = JSON.parse(data) as Configuration;
     // TODO Support other forms of targets
-    workflow = {
-      ...workflow,
-      ...workflowFromFile,
+    configuration = {
+      ...configuration,
+      ...configurationFromFile,
       files: target ? [target] : undefined,
     };
 
     const workflowPrompt = await readFile(`${directory}/workflow.md`);
-    execute({ ...workflow, systemPrompt: workflowPrompt.toString() });
+    execute({ ...configuration, systemPrompt: workflowPrompt.toString() });
   } catch (err: any) {
     if (err.code === "ENOENT" && err.path.endsWith("workflow.md")) {
-      execute(workflow);
+      execute(configuration);
       return;
     }
     console.error("Error reading file:", err);
