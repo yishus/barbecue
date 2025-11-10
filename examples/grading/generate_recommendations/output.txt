@@ -1,0 +1,17 @@
+========== TEST RECOMMENDATIONS ==========
+<% const recommendations = it.workflow.output['generate_recommendations'].recommendations %>
+<% if (recommendations == null || (Array.isArray(recommendations) && recommendations.length == 0) { %>
+No recommendations found.
+<% } else if (Array.isArray(recommendations)) { %>
+<% recommendations.forEach(function(rec, index){ %>
+  Recommendation #<%= index + 1 %>:
+  Description: <%= rec.description %>
+  Impact: <%= rec.impact %>
+  Priority: <%= rec.priority %>
+
+  Code Suggestion:
+
+  <%= rec.code_suggestion %>
+<% }) %>
+<% } %>
+===========================================
