@@ -86,7 +86,7 @@ const spawnAsync = (
 
     // Use 'close' for when the stdio streams have been closed (usually follows 'exit')
     child.on("close", (code: number | null) => {
-      if (code === 0) {
+      if (code === 0 || code === 1) { // 'rg' returns 1 when no matches are found
         resolve({ stdout: stdoutData, stderr: stderrData });
       } else {
         // Reject with a clear error message including the exit code and stderr

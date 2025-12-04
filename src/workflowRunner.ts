@@ -141,14 +141,14 @@ const processStep = async (
     tools,
   });
 
-  let responseContainsFunctionCall = res.output.some(
+  let functionCalls = res.output.filter(
     (item) => item.type === "function_call",
   );
 
-  while (responseContainsFunctionCall) {
+  while (functionCalls.length > 0) {
     let functionResults: ResponseInputItem.FunctionCallOutput[] = [];
 
-    for (const item of res.output) {
+    for (const item of functionCalls) {
       if (item.type === "function_call") {
         console.log("Invoking tool:", item.name);
         console.log("With arguments:", item.arguments);
@@ -176,7 +176,7 @@ const processStep = async (
         input: functionResults,
         tools,
       });
-      responseContainsFunctionCall = functionOutputResponse.output.some(
+      functionCalls = functionOutputResponse.output.filter(
         (item) => item.type === "function_call",
       );
     }
