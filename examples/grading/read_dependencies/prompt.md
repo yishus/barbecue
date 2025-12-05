@@ -11,6 +11,3 @@ Example:
 
 If you are told to find the dependencies of `tests/root.test.jsx`,
 then you would use the functions as explained above and ultimately respond with `<sut>app/root.tsx</sut>`
-
-
-    
